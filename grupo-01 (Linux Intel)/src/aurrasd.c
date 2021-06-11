@@ -8,11 +8,20 @@ struct data {
     int maxRunningProcesses;
 };
 
-void ctrl_c_handler(int signum){
-    unlink(FIFO); 
-    unlink(SENDTOCLIENT);
-    puts("\n[Server] Pipes fechados e servidor terminado");
-    exit(0);
+void handler(int signum){
+    switch (signum)             //optei por um switch pq assim ficam todos os sinais neste handler
+    {
+    case SIGINT:
+        unlink(FIFO); 
+        unlink(SENDTOCLIENT);
+        puts("\n[Server] Pipes fechados e servidor terminado");
+        exit(0);
+        break;
+    
+    default:
+        break;
+    }
+    
 }
 
 int main(int argc, char* argv[]){

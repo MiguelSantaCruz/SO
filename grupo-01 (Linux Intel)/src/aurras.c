@@ -25,22 +25,22 @@ int main(int argc, char* argv[]){
 
     signal(SIGALRM, handler);
 
-    int fifo = open("fifo",O_WRONLY);
-    if(fifo == -1){
+    int fifo_fd = open("fifo",O_WRONLY);
+    if(fifo_fd == -1){
         puts("[Error] Server not iniciated!\n");
     }
 
     for (int i = 1; i < argc; i++) {
-        write(fifo,argv[i],strlen(argv[i]));
+        write(fifo_fd,argv[i],strlen(argv[i]));
     }
-    
-    close(fifo);
-    int readFifo = open("sendToClient",O_RDONLY);
+
+    close(fifo_fd);
+    int readFifo_fd = open("sendToClient",O_RDONLY);
     int bytes = 0;
     char buffer[BUFFERSIZE];
-    while ((bytes = read(readFifo,buffer,BUFFERSIZE)) > 0) {
-            write(STDOUT_FILENO,buffer,bytes);
+    while ((bytes = read(readFifo_fd, buffer, BUFFERSIZE)) > 0) {
+            write(STDOUT_FILENO, buffer, bytes);
     }
-    close(readFifo);
+    close(readFifo_fd);
     return 0;
 }
