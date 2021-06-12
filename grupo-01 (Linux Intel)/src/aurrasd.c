@@ -1,11 +1,19 @@
 #include "aurrasd.h"
 
+#define MAX_READ_BUFFER 2048
+#define MAX_BUF_SIZE 1024
 #define SENDTOCLIENT "../tmp/sendToClient"
 #define FIFO "../tmp/fifo"
 
 struct data {
     int runningProcesses;
     int maxRunningProcesses;
+};
+
+struct config {
+    char id_filtro[12];
+    char fich_exec[12];
+    int max_inst;
 };
 
 void handler(int signum){
@@ -23,6 +31,93 @@ void handler(int signum){
     }
     
 }
+
+
+
+//------------------------------FUNÇÃO AUXILIAR (readline)-----------------------------------------------
+
+
+
+char read_buffer[MAX_READ_BUFFER];
+int read_buffer_pos = 0;
+int read_buffer_end = 0;
+
+int readc (int fd, char *c) {
+    if(read_buffer_pos == read_buffer_end){
+		read_buffer_end = read(fd, read_buffer, MAX_READ_BUFFER);
+		switch(read_buffer_end){        //read_buffer_end guarda o nº de bytes lidos / 0 se o ficherio terminar / -1 se ocorrer erros
+			case -1:
+				perror("read");
+				return -1;
+			case 0:
+				return 0;
+				break;
+			default:
+				read_buffer_pos = 0;
+		}
+	}
+    *c = read_buffer[read_buffer_pos++];
+
+    return 1;
+}
+
+
+
+ssize_t readln(int fd, char *line, size_t size) {       //line é um buffer
+    int res = 0;
+    int i = 0;
+
+    while (i<size && (res = readc (fd, &line[i]) > 0)) { //ate o readc dize que ja nao ha mais nada para ler ou excedermos o tamanho max
+        i++;
+        if (((char*) line) [i-1] == '\n') {
+            return i;   //se encontrar um \n dá imediatamente return do nº de bytes lidos
+        }
+    }
+    return i;
+}
+
+//-------------------------------------------------------------------------------
+
+
+void serverConfig (char path[200]) {
+    char buffer[MAX_BUF_SIZE];
+    
+    int file_open_fd = open (path, O_RDONLY);    //começar por abrir o ficheiro para leitura
+    if (file_open_fd < 0) {
+        perror ("[open] Path error");
+        _exit(-1);
+    }
+
+    //agora, vamos ler o que tem no ficheiro
+    int nbytes = read (file_open_fd, buffer, MAX_BUF_SIZE);
+    if (nbytes <= 0) {
+        perror("[read] No bytes readed");
+        return -1;
+    }
+    struct config *temp = malloc(sizeof(struct config));
+
+    char *str;
+    char *exec_args[3];
+    int i = 0;
+    while (readln(file_open_fd, buffer, MAX_BUF_SIZE) > 0) {
+        //apos ler uma linha, vamos separá-la nos seus 3 campos e colocar na struct
+        str = strtok(buffer, " ");
+        while (str != NULL) {
+            exec_args[i] = str;
+            printf ("%s\n", str);   //verificar se foi bem separado quando o programa estiver a correr
+            str = strtok(NULL, " ");
+            i++;
+        }
+        strcpy(temp->id_filtro, exec_args[0]);
+        strcpy(temp->fich_exec, exec_args[1]);
+        strcpy(temp->max_inst, atoi(exec_args[2]));
+
+        //reset counter to make the same for the next lines
+        i = 0;
+    }
+    printf("Filtros carregados na struct config\n");    //para debug :)
+}
+
 
 int main(int argc, char* argv[]){
     if (argc < 3) {
