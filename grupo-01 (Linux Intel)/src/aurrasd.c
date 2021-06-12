@@ -13,7 +13,7 @@ struct data {
 
 struct config {
     char id_filtro[12];
-    char fich_exec[12];
+    char fich_exec[60];
     int max_inst;
 };
 
@@ -61,7 +61,7 @@ int readline(int fd, char* buf, size_t size){
 //-------------------------------------------------------------------------------
 
 
-int serverConfig (char* path) {
+int serverConfig (char* path, struct config * cfg) {
     char buffer[MAX_BUF_SIZE];
     
     int file_open_fd = open (path, O_RDONLY);    //começar por abrir o ficheiro para leitura
@@ -70,38 +70,24 @@ int serverConfig (char* path) {
         _exit(-1);
     }
 
-    //agora, vamos ler o que tem no ficheiro
-    int nbytes = read (file_open_fd, buffer, MAX_BUF_SIZE);
-    if (nbytes <= 0) {
-        perror("[read] No bytes readed");
-        return -1;
+
+    for (int i=0; i<5; i++) {
+
+        readline(file_open_fd, buffer, 200);
+        char * substr = strtok(buffer, " ");
+
+        strcpy (cfg->id_filtro, substr);
+        substr = strtok(NULL, " ");
+        strcpy (cfg->fich_exec, substr);
+        substr = strtok(NULL, " ");
+        cfg->max_inst = atoi(substr);
+
+        printf("%s\n", cfg->id_filtro);
+        printf ("%s\n", cfg->fich_exec);
+        printf("%d\n", cfg->max_inst);
     }
-    struct config *temp = malloc(sizeof(struct config));
 
-    char *str;
-    char *exec_args[3];
-    int i = 0;
-    while (readline(file_open_fd, buffer, MAX_BUF_SIZE) > 0) {
-        //apos ler uma linha, vamos separá-la nos seus 3 campos e colocar na struct
-        printf("banana\n");
-        str = strtok(buffer, " ");
-        while (str != NULL) {
-            exec_args[i] = str;
-            printf ("%s\n", str);   //verificar se foi bem separado quando o programa estiver a correr
-            str = strtok(NULL, " ");
-            i++;
-        }
-        printf("%s\n", exec_args[0]);
-        printf("%s\n", exec_args[1]);
-        printf("%s\n", exec_args[2]);
 
-        strcpy(temp->id_filtro, exec_args[0]);
-        strcpy(temp->fich_exec, exec_args[1]);
-        temp->max_inst = atoi(exec_args[2]);
-
-        //reset counter to make the same for the next lines
-        i = 0;
-    }
     printf("Filtros carregados na struct config\n");    //para debug :)
     return 0;
 }
@@ -112,7 +98,8 @@ int main(int argc, char* argv[]){
         perror("Formato de execução incorreto!");
         return -1;
     }
-    serverConfig("../etc/aurrasd.conf");
+    struct config *cfg = malloc(sizeof(struct config));
+    serverConfig(CONFIG_PATH, cfg);
     DATA data = malloc(sizeof(struct data));
     initializeData(data);
     if(signal(SIGINT, handler) == SIG_ERR){
