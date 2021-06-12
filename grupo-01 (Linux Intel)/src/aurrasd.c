@@ -3,7 +3,8 @@
 #define MAX_READ_BUFFER 2048
 #define MAX_BUF_SIZE 1024
 #define SENDTOCLIENT "../tmp/sendToClient"
-#define FIFO "../tmp/fifo"
+#define FIFO "fifo"
+#define CONFIG_PATH "../etc/aurrasd.conf"
 
 struct data {
     int runningProcesses;
@@ -36,50 +37,31 @@ void handler(int signum){
 
 //------------------------------FUNÇÃO AUXILIAR (readline)-----------------------------------------------
 
+int contador = 0 ;
 
-
-char read_buffer[MAX_READ_BUFFER];
-int read_buffer_pos = 0;
-int read_buffer_end = 0;
-
-int readc (int fd, char *c) {
-    if(read_buffer_pos == read_buffer_end){
-		read_buffer_end = read(fd, read_buffer, MAX_READ_BUFFER);
-		switch(read_buffer_end){        //read_buffer_end guarda o nº de bytes lidos / 0 se o ficherio terminar / -1 se ocorrer erros
-			case -1:
-				perror("read");
-				return -1;
-			case 0:
-				return 0;
-				break;
-			default:
-				read_buffer_pos = 0;
-		}
-	}
-    *c = read_buffer[read_buffer_pos++];
-
-    return 1;
+int readch(int fd, char* buf){
+    contador ++;
+    return read(fd,buf,1);
 }
 
-
-
-ssize_t readln(int fd, char *line, size_t size) {       //line é um buffer
-    int res = 0;
-    int i = 0;
-
-    while (i<size && (res = readc (fd, &line[i]) > 0)) { //ate o readc dize que ja nao ha mais nada para ler ou excedermos o tamanho max
-        i++;
-        if (((char*) line) [i-1] == '\n') {
-            return i;   //se encontrar um \n dá imediatamente return do nº de bytes lidos
-        }
+int readline(int fd, char* buf, size_t size){
+    char* tmp = malloc(sizeof(char*));
+    int curr = 0;
+    int read = 0;
+    while ((read = readch(fd,tmp))>0 && curr < size)
+    {
+        buf[curr] = tmp [read-1];
+        curr++;
+        if (tmp[read-1]=='\n')
+            return -1;
     }
-    return i;
+    return 0;
 }
 
 //-------------------------------------------------------------------------------
 
 
-void serverConfig (char path[200]) {
+int serverConfig (char* path) {
     char buffer[MAX_BUF_SIZE];
     
     int file_open_fd = open (path, O_RDONLY);    //começar por abrir o ficheiro para leitura
@@ -99,8 +81,9 @@ void serverConfig (char path[200]) {
     char *str;
     char *exec_args[3];
     int i = 0;
-    while (readln(file_open_fd, buffer, MAX_BUF_SIZE) > 0) {
+    while (readline(file_open_fd, buffer, MAX_BUF_SIZE) > 0) {
         //apos ler uma linha, vamos separá-la nos seus 3 campos e colocar na struct
+        printf("banana\n");
         str = strtok(buffer, " ");
         while (str != NULL) {
             exec_args[i] = str;
@@ -108,14 +91,19 @@ void serverConfig (char path[200]) {
             str = strtok(NULL, " ");
             i++;
         }
+        printf("%s\n", exec_args[0]);
+        printf("%s\n", exec_args[1]);
+        printf("%s\n", exec_args[2]);
+
         strcpy(temp->id_filtro, exec_args[0]);
         strcpy(temp->fich_exec, exec_args[1]);
-        strcpy(temp->max_inst, atoi(exec_args[2]));
+        temp->max_inst = atoi(exec_args[2]);
 
         //reset counter to make the same for the next lines
         i = 0;
     }
     printf("Filtros carregados na struct config\n");    //para debug :)
+    return 0;
 }
 
 
@@ -124,9 +112,10 @@ int main(int argc, char* argv[]){
         perror("Formato de execução incorreto!");
         return -1;
     }
+    serverConfig("../etc/aurrasd.conf");
     DATA data = malloc(sizeof(struct data));
     initializeData(data);
-    if(signal(SIGINT,ctrl_c_handler) == SIG_ERR){
+    if(signal(SIGINT, handler) == SIG_ERR){
         perror("Erro de terminação");
     }
     char buffer[1024];
