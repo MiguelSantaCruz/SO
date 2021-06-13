@@ -102,16 +102,12 @@ int main(int argc, char* argv[]){
             buffer[bytes]='\0';
             printf("Lido: %s\n",buffer);
             fflush(stdout);
-            if(strcmp(buffer,"status") == 0){
+            if(strcmp(buffer,"status;") == 0){
                 printf("Recebido [STATUS]\n");
                 read(fifo_fd, buffer, BUFFERSIZE);
-                buffer[bytes-1]='\0';
-                while (strcmp(buffer,"ready") != 0)
-                {
-                    //printf("Ciclo ate ready\n");
-                    read(fifo_fd, buffer, BUFFERSIZE);
-                }
-                printf("Recebido [READY]\n");
+                pid_t pid = atoi(buffer);
+                printf("Enviando sinal a: %d",pid);
+                kill(pid,SIGUSR1);
                 sendStatus(cfg);
             }else{
                 sendTerminate();

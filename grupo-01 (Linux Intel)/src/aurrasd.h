@@ -17,5 +17,6 @@ int readch(int, char*);
 int readline(int, char*, size_t);
 int serverConfig (char*, CONFIG);
 void sendStatus(CONFIG);
+void sendTerminate();
 void initializeConfig(CONFIG);
 void handler(int);
