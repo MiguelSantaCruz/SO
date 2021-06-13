@@ -9,9 +9,13 @@
 
 #define BUFFERSIZE 1024
 
-typedef struct data *DATA;
+typedef struct config *CONFIG;
+
 
 int main(int, char**);
-void sendStatus(DATA);
-void initializeData(DATA);
-void ctrl_c_handler(int);
+int readch(int, char*);
+int readline(int, char*, size_t);
+int serverConfig (char*, CONFIG);
+void sendStatus(CONFIG);
+void initializeConfig(CONFIG);
+void handler(int);

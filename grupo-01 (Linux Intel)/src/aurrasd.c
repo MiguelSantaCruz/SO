@@ -2,19 +2,15 @@
 
 #define MAX_READ_BUFFER 2048
 #define MAX_BUF_SIZE 1024
-#define SENDTOCLIENT "../tmp/sendToClient"
+#define SENDTOCLIENT "sendToClient"
 #define FIFO "fifo"
 #define CONFIG_PATH "../etc/aurrasd.conf"
-
-struct data {
-    int runningProcesses;
-    int maxRunningProcesses;
-};
+#define NUMBER_OF_FILTERS 5
 
 struct config {
-    char id_filtro[12];
-    char fich_exec[60];
-    int max_inst;
+    int* runningProcesses;
+    char** nomes;
+    int* valores;
 };
 
 void handler(int signum){
@@ -32,7 +28,6 @@ void handler(int signum){
     }
     
 }
-
 
 
 //------------------------------FUNÇÃO AUXILIAR (readline)-----------------------------------------------
@@ -61,60 +56,66 @@ int readline(int fd, char* buf, size_t size){
 //-------------------------------------------------------------------------------
 
 
-int serverConfig (char* path, struct config * cfg) {
+int serverConfig (char* path, CONFIG cfg) {
     char buffer[MAX_BUF_SIZE];
-    
     int file_open_fd = open (path, O_RDONLY);    //começar por abrir o ficheiro para leitura
     if (file_open_fd < 0) {
         perror ("[open] Path error");
         _exit(-1);
     }
-
-
-    for (int i=0; i<5; i++) {
-
-        readline(file_open_fd, buffer, 200);
+    for (int i=0; i<NUMBER_OF_FILTERS; i++) {
+        readline(file_open_fd, buffer, BUFFERSIZE);
         char * substr = strtok(buffer, " ");
-
-        strcpy (cfg->id_filtro, substr);
         substr = strtok(NULL, " ");
-        strcpy (cfg->fich_exec, substr);
+        cfg -> nomes[i] = malloc(sizeof(char)*100);
+        strcpy ((char*) cfg->nomes[i], substr);
         substr = strtok(NULL, " ");
-        cfg->max_inst = atoi(substr);
-
-        printf("%s\n", cfg->id_filtro);
-        printf ("%s\n", cfg->fich_exec);
-        printf("%d\n", cfg->max_inst);
+        cfg->valores[i] = atoi(substr);
     }
-
-
-    printf("Filtros carregados na struct config\n");    //para debug :)
+    for (int i = 0; i < NUMBER_OF_FILTERS; i++)
+        printf("%s: %d\n",cfg->nomes[i],cfg->valores[i]);
     return 0;
 }
 
 
 int main(int argc, char* argv[]){
+    if(signal(SIGINT, handler) == SIG_ERR){
+        perror("Erro de terminação");
+    }
     if (argc < 3) {
         perror("Formato de execução incorreto!");
         return -1;
     }
-    struct config *cfg = malloc(sizeof(struct config));
+    CONFIG cfg = malloc(sizeof(struct config));
+    initializeConfig(cfg);
     serverConfig(CONFIG_PATH, cfg);
-    DATA data = malloc(sizeof(struct data));
-    initializeData(data);
-    if(signal(SIGINT, handler) == SIG_ERR){
-        perror("Erro de terminação");
-    }
+    fflush(stdout);
     char buffer[1024];
     int bytes = 0;
-    mkfifo(FIFO, 0644);
+    mkfifo(FIFO, 0744);
+    mkfifo(SENDTOCLIENT,0744);
     int fifo_fd = open(FIFO, O_RDONLY);
+    printf("Abertos fifos a espera de input\n");
+    fflush(stdout);
     while(1){
         while ((bytes = read(fifo_fd, buffer, BUFFERSIZE)) > 0) {
+            buffer[bytes]='\0';
+            printf("Lido: %s\n",buffer);
+            fflush(stdout);
             if(strcmp(buffer,"status") == 0){
-                sendStatus(data);
+                printf("Recebido [STATUS]\n");
+                read(fifo_fd, buffer, BUFFERSIZE);
+                buffer[bytes-1]='\0';
+                while (strcmp(buffer,"ready") != 0)
+                {
+                    //printf("Ciclo ate ready\n");
+                    read(fifo_fd, buffer, BUFFERSIZE);
+                }
+                printf("Recebido [READY]\n");
+                sendStatus(cfg);
+            }else{
+                sendTerminate();
             }
-            write(STDOUT_FILENO,buffer,bytes);
         }
     }
     unlink(FIFO);
@@ -122,16 +123,27 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
-void sendStatus(DATA data){
-    mkfifo("sendToClient",0644);            //nao teria que ser fora desta funçao (p.e. criar uma init_fifo) pq assim esta sempre a dar mkfifo... 
+void sendTerminate(){
+    mkfifo(SENDTOCLIENT,0644);
+    int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
+    write(sendToClient_fd, "none", 4);
+    printf("Enviado [NONE]");
+}
+
+void sendStatus(CONFIG cfg){
+    mkfifo(SENDTOCLIENT,0644);
     int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
     char string[100];
-    sprintf(string, "Running Processes: [%d/%d]\n", data->runningProcesses, data->maxRunningProcesses);
-    write(sendToClient_fd, string, strlen(string));
+    for (int i = 0; i < NUMBER_OF_FILTERS; i++)
+    {
+        sprintf(string, "Running Processes of %s: [%d/%d]\n",cfg -> nomes[i] ,cfg->runningProcesses[i], cfg->valores[i]);
+        write(sendToClient_fd, string, strlen(string));
+    }
     close(sendToClient_fd);
 }
 
-void initializeData(DATA data){
-    data->maxRunningProcesses = 3;
-    data->runningProcesses = 0;
+void initializeConfig(CONFIG cfg){
+    cfg -> nomes = malloc(sizeof(char*)*NUMBER_OF_FILTERS);
+    cfg -> valores = malloc(sizeof(int)*NUMBER_OF_FILTERS);
+    cfg -> runningProcesses = malloc(sizeof(int)*NUMBER_OF_FILTERS);
 }
