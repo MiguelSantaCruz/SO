@@ -30,7 +30,7 @@ void handler(int signum){
 }
 
 
-//------------------------------FUNÇÃO AUXILIAR (readline)-----------------------------------------------
+//------------------------------FUNÇÃO AUXILIAR (readline) para o serverConfig -----------------------------------------------
 
 int contador = 0 ;
 
@@ -56,7 +56,7 @@ int readline(int fd, char* buf, size_t size){
 //-------------------------------------------------------------------------------
 
 
-int serverConfig (char* path, CONFIG cfg) {
+int serverConfig (char* path, CONFIG cfg) {     //faz o povoamento da struct com os valores
     char buffer[MAX_BUF_SIZE];
     int file_open_fd = open (path, O_RDONLY);    //começar por abrir o ficheiro para leitura
     if (file_open_fd < 0) {
@@ -76,6 +76,51 @@ int serverConfig (char* path, CONFIG cfg) {
         printf("%s: %d\n",cfg->nomes[i],cfg->valores[i]);
     return 0;
 }
+
+
+
+int filtro_existente (char* nomeFiltro, CONFIG cfg) {
+    for (int i = 0; i<NUMBER_OF_FILTERS; i++) {
+        if (strcmp (cfg->nomes[i], nomeFiltro)) {
+            return i;           //caso encontre, retornamos o indice em que encontramos
+        }
+    } 
+    return -1;  //caso dê erro retornamos -1
+}
+
+
+int filtro_permitido (int idx_filtro, CONFIG cfg) {
+    //return 1 se for possivel; return 0 se nao or possivel
+    if (cfg->valores[idx_filtro] > cfg->runningProcesses[idx_filtro]) {
+        return 1;
+    }
+    return 0;
+}
+
+
+void execTarefa (char* nomeFiltro, char* args, CONFIG cfg) {
+    int indx_filtro;
+    if ((indx_filtro = filtro_existente(nomeFiltro, cfg)) != -1 && filtro_permitido(indx_filtro, cfg) == 1) {
+        int status;
+        int pid = fork();
+        if (pid == 0) {
+            //coisas do filho
+            char * path = strcat ("../bin/aurrasd_filters/", nomeFiltro);   //se isto nao funfar, testar com: execl(aurrasd-filters/aurrasd-echo, aurrasd-echo, NULL)
+            execl(path, nomeFiltro, NULL);
+            printf("Exec error (não é suposto aparecer isto dps de um exec)");  //para debugg :)
+        }
+        else {
+            //coisas do pai
+            wait(&status);
+        }
+    }
+    else {
+        printf ("Não pode submeter mais pedidos. A lista de espera está cheia\n");
+    }
+}
+
+
+
 
 
 int main(int argc, char* argv[]){
