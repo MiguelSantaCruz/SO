@@ -114,6 +114,15 @@ void execTarefa (char* nomeFiltro, char* args, CONFIG cfg) {
         else {
             //coisas do pai
             wait(&status);
+            
+            if (WIFEXITED(status)) {
+                if (WEXITSTATUS(status) < 255) {
+                    printf("[pai] tudo ok");
+                }
+                else {
+                    printf("[pai] erros...");
+                }
+            }
         }
     }
     else {
