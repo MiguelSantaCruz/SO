@@ -22,7 +22,9 @@ void handler(int signum){
         puts("\n[Server] Pipes fechados e servidor terminado");
         exit(0);
         break;
-    
+    case SIGPIPE:
+        printf("[SIGPIPE] O cliente fechou o terminal de escrita\n");
+        break;
     default:
         break;
     }
@@ -127,6 +129,7 @@ int main(int argc, char* argv[]){
     if(signal(SIGINT, handler) == SIG_ERR){
         perror("Erro de terminação");
     }
+    signal(SIGPIPE,handler);
     if (argc < 3) {
         perror("Formato de execução incorreto!");
         return -1;
@@ -134,25 +137,18 @@ int main(int argc, char* argv[]){
     CONFIG cfg = malloc(sizeof(struct config));
     initializeConfig(cfg);
     serverConfig(CONFIG_PATH, cfg);
-    fflush(stdout);
     char buffer[1024];
     int bytes = 0;
-    mkfifo(FIFO, 0744);
-    mkfifo(SENDTOCLIENT,0744);
+    mkfifo(FIFO,0777);
+    mkfifo(SENDTOCLIENT,0777);
     int fifo_fd = open(FIFO, O_RDONLY);
-    printf("Abertos fifos a espera de input\n");
-    fflush(stdout);
     while(1){
         while ((bytes = read(fifo_fd, buffer, BUFFERSIZE)) > 0) {
             buffer[bytes]='\0';
             printf("Lido: %s\n",buffer);
             fflush(stdout);
-            if(strcmp(buffer,"status;") == 0){
+            if(strcmp(buffer,"status") == 0){
                 printf("Recebido [STATUS]\n");
-                read(fifo_fd, buffer, BUFFERSIZE);
-                pid_t pid = atoi(buffer);
-                printf("Enviando sinal a: %d",pid);
-                kill(pid,SIGUSR1);
                 sendStatus(cfg);
             }else{
                 sendTerminate();
@@ -165,21 +161,24 @@ int main(int argc, char* argv[]){
 }
 
 void sendTerminate(){
-    mkfifo(SENDTOCLIENT,0644);
     int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
     write(sendToClient_fd, "none", 4);
-    printf("Enviado [NONE]");
+    close(sendToClient_fd);
+    printf("Enviado [NONE]\n");
+    fflush(stdout);
 }
 
 void sendStatus(CONFIG cfg){
-    mkfifo(SENDTOCLIENT,0644);
     int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
-    char string[100];
+    char string[200];
     for (int i = 0; i < NUMBER_OF_FILTERS; i++)
     {
         sprintf(string, "Running Processes of %s: [%d/%d]\n",cfg -> nomes[i] ,cfg->runningProcesses[i], cfg->valores[i]);
         write(sendToClient_fd, string, strlen(string));
+        printf("Escrito %s para o cliente\n",string);
+        fflush(stdout);
     }
+    printf("Enviado status\n");
     close(sendToClient_fd);
 }
 

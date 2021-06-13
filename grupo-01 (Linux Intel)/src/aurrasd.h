@@ -16,6 +16,7 @@ int main(int, char**);
 int readch(int, char*);
 int readline(int, char*, size_t);
 int serverConfig (char*, CONFIG);
+void execTarefa (char*, char*, CONFIG );
 void sendStatus(CONFIG);
 void sendTerminate();
 void initializeConfig(CONFIG);
