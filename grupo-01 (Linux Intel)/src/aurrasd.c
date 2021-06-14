@@ -206,7 +206,26 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
 
 
 
+/*  EXPLICACAO DESTA IDEIA:
 
+funçao para remover o ultimo elemento do comando passado na bash.
+Assim, por ex:
+./aurras transform samples/sample-1.m4a output.m4a alto eco rapido
+
+aplicamos o ultimo filtro
+eliminamos do array
+
+**repetimos isto mais 2 vezes**
+
+o array vai ficar: ./aurras transform samples/sample-1.m4a output.m4a
+
+como output.m4a nao corresponde a nenhum filtro, já está feito!
+*/
+
+char* removeLastArg (char * argv[], int argc) {
+    argv[argc-1] = '\0';
+    return argv;
+}
 
 
 
