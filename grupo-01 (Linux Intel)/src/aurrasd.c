@@ -205,7 +205,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
 
 
 
-
+/*
 
 char *add_path(char *arg, char *path , char *f_name){ //adiciona o path ao argumento
     free(arg);
@@ -258,7 +258,7 @@ int execTarefa2 (char * args[], int n_commands, char* pathFiltro, struct config 
     for (i=0; i<n_commands; i++)
 
 }
-
+*/
 
 
 int main(int argc, char* argv[]){
