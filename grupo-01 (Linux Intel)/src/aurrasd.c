@@ -159,6 +159,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     int idx_alto = encontraIndice ("alto", cfg);
     if (em_exec_alto < cfg->maxInstancias[idx_alto]) {
         execTarefa(cfg->execFiltros[idx_alto], cfg, argv);
+        cfg->runningProcesses[idx_alto]--;
     }
     else {
         enQueue(alto_q, argv[3]);      //guardar o nome do ficheiro de output na queue para poder fazer mais tarde
@@ -167,6 +168,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     int idx_baixo = encontraIndice("baixo", cfg);
     if (em_exec_baixo < cfg->maxInstancias[idx_baixo]) {
         execTarefa(cfg->execFiltros[idx_baixo], cfg, argv);
+        cfg->runningProcesses[idx_baixo]--;
     }
     else {
         enQueue(baixo_q, argv[3]);
@@ -175,6 +177,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     int idx_eco = encontraIndice("eco", cfg);
     if (em_exec_eco < cfg->maxInstancias[idx_eco]) {
         execTarefa(cfg->execFiltros[idx_eco], cfg, argv);
+        cfg->runningProcesses[idx_eco]--;
     }
     else {
         enQueue(eco_q, argv[3]);
@@ -183,6 +186,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     int idx_rapido = encontraIndice("rapido", cfg);
     if (em_exec_rapido < cfg->maxInstancias[idx_rapido]) {
         execTarefa(cfg->execFiltros[idx_rapido], cfg, argv);
+        cfg->runningProcesses[idx_rapido]--;
     }
     else {
         enQueue(rapido_q, argv[3]);
@@ -191,6 +195,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     int idx_lento = encontraIndice("lento", cfg);
     if (em_exec_lento < cfg->maxInstancias[idx_lento]) {
         execTarefa(cfg->execFiltros[idx_lento], cfg, argv);
+        cfg->runningProcesses[idx_lento]--;
     }
     else {
         enQueue(lento_q, argv[3]);
