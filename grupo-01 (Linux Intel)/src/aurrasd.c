@@ -155,9 +155,11 @@ int encontraIndice (char* identificador, struct config *cfg) {
     }
 }
 
-void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struct Queue* eco_q, struct Queue* rapido_q, struct Queue* lento_q, char* argv[]) {
+
+//a minha ideia era fazer o ultimo parametro do argv e quando acabar tirá-lo. E fazer isto até que o ultimo argumento do argv não seja nenhum nick de filtro
+void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struct Queue* eco_q, struct Queue* rapido_q, struct Queue* lento_q, char* argv[], int argc) {
     int idx_alto = encontraIndice ("alto", cfg);
-    if (em_exec_alto < cfg->maxInstancias[idx_alto]) {
+    if ((strcmp(argv[argc], "alto") == 0) && em_exec_alto < cfg->maxInstancias[idx_alto]) {
         execTarefa(cfg->execFiltros[idx_alto], cfg, argv);
         cfg->runningProcesses[idx_alto]--;
     }
@@ -166,7 +168,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     }
 
     int idx_baixo = encontraIndice("baixo", cfg);
-    if (em_exec_baixo < cfg->maxInstancias[idx_baixo]) {
+    if ((strcmp(argv[argc], "baixo") == 0) && em_exec_baixo < cfg->maxInstancias[idx_baixo]) {
         execTarefa(cfg->execFiltros[idx_baixo], cfg, argv);
         cfg->runningProcesses[idx_baixo]--;
     }
@@ -175,7 +177,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     }
 
     int idx_eco = encontraIndice("eco", cfg);
-    if (em_exec_eco < cfg->maxInstancias[idx_eco]) {
+    if ((strcmp(argv[argc], "eco") == 0) && em_exec_eco < cfg->maxInstancias[idx_eco]) {
         execTarefa(cfg->execFiltros[idx_eco], cfg, argv);
         cfg->runningProcesses[idx_eco]--;
     }
@@ -184,7 +186,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     }
 
     int idx_rapido = encontraIndice("rapido", cfg);
-    if (em_exec_rapido < cfg->maxInstancias[idx_rapido]) {
+    if ((strcmp(argv[argc], "rapido") == 0) && em_exec_rapido < cfg->maxInstancias[idx_rapido]) {
         execTarefa(cfg->execFiltros[idx_rapido], cfg, argv);
         cfg->runningProcesses[idx_rapido]--;
     }
@@ -193,7 +195,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
     }
 
     int idx_lento = encontraIndice("lento", cfg);
-    if (em_exec_lento < cfg->maxInstancias[idx_lento]) {
+    if ((strcmp(argv[argc], "lento") == 0) && em_exec_lento < cfg->maxInstancias[idx_lento]) {
         execTarefa(cfg->execFiltros[idx_lento], cfg, argv);
         cfg->runningProcesses[idx_lento]--;
     }
