@@ -117,7 +117,7 @@ int filtro_permitido (int idx_filtro, CONFIG cfg) {
 }
 
         //nome do fitro precisa de ser, por ex: "aurrasd-gain-double"
-void execTarefa (char* nomeFiltro, CONFIG cfg, char* argv[]) {
+void execTarefa_fail (char* nomeFiltro, CONFIG cfg, char* argv[]) {
     int indx_filtro;
     if ((indx_filtro = filtro_existente(nomeFiltro, cfg)) != -1 && filtro_permitido(indx_filtro, cfg) == 1) {
         int status;
@@ -147,6 +147,60 @@ void execTarefa (char* nomeFiltro, CONFIG cfg, char* argv[]) {
     }
 }
 
+
+
+void executaTarefa (int n_filtros, char ** filtros_args, char * input_file, char * output_name) {
+    int p[n_filtros+1][2];
+    int current_pipe = 0;
+    char*buffer = malloc(sizeof(char*) * 1024);
+    int filter = 0;
+    int bytes_read;
+    int inputFile_fd = open(input_file, O_RDONLY, 0666);
+    char * path = strcat ("./", output_name);
+    int outputFile_fd = open(path, O_CREAT | O_RDWR, 0666);
+    int status;
+    pipe(p[current_pipe]);
+    switch (fork()) {
+        case 0: //filho
+            close(p[current_pipe][1]);
+            while (current_pipe <= n_filtros) {
+                pipe(p[current_pipe+1]);
+                switch (fork()) {
+                case 0:
+                    //coisas
+                    dup2(p[current_pipe][0], STDIN_FILENO);
+                    close(p[current_pipe][0]);
+                    dup2(p[current_pipe+1][1], STDOUT_FILENO);
+                    close(p[current_pipe+1][1]);
+                    execl(filtros_args[filter], filtros_args[filter], NULL);
+                    break;
+                
+                default:
+                    close(p[current_pipe][0]);  //fechar o descritor de leitura do pipe anterior para nao ser herdado por mais nenhum processo
+                    close(p[current_pipe+1][1]);    //fechar o descritor de escrita do proximo pipe para nao ser herdado por mais nenhum processo
+                    break;
+                }
+                current_pipe++;
+                filter++;
+            }
+            while ((bytes_read = read(p[current_pipe][0], buffer, 1024)) > 0) {
+                write(outputFile_fd, buffer, bytes_read);
+            }
+
+            exit(0);
+            break;
+        default:
+            while((bytes_read = read(inputFile_fd, buffer, 1024)) > 0) {
+                write(p[current_pipe][1], buffer, bytes_read);
+            }
+            close(p[current_pipe][1]);
+            pause();
+            break;
+    }
+}
+
+
+
 int encontraIndice (char* identificador, struct config *cfg) {
     for (int i=0; i<5; i++) {
         if (strcmp (cfg->identificadorFiltro[i], identificador) == 0) {
@@ -155,7 +209,7 @@ int encontraIndice (char* identificador, struct config *cfg) {
     }
 }
 
-
+/*
 //a minha ideia era fazer o ultimo parametro do argv e quando acabar tirá-lo. E fazer isto até que o ultimo argumento do argv não seja nenhum nick de filtro
 void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struct Queue* eco_q, struct Queue* rapido_q, struct Queue* lento_q, char* argv[], int argc) {
     int idx_alto = encontraIndice ("alto", cfg);
@@ -203,7 +257,7 @@ void decide_exec (CONFIG cfg, struct Queue* alto_q, struct Queue* baixo_q, struc
         enQueue(lento_q, argv[3]);
     }
 }
-
+*/
 
 
 /*  EXPLICACAO DESTA IDEIA:
@@ -220,10 +274,11 @@ eliminamos do array
 o array vai ficar: ./aurras transform samples/sample-1.m4a output.m4a
 
 como output.m4a nao corresponde a nenhum filtro, já está feito!
-*/
 
-char* removeLastArg (char * argv[], int argc) {
-    argv[argc-1] = '\0';
+
+char* removeLastArg (char * argv[], int* argc) {
+    argv[(*argc)-1] = '\0';
+    *argc--;
     return argv;
 }
 
@@ -231,7 +286,7 @@ char* removeLastArg (char * argv[], int argc) {
 
 
 
-/*
+
 
 char *add_path(char *arg, char *path , char *f_name){ //adiciona o path ao argumento
     free(arg);
@@ -289,12 +344,13 @@ int execTarefa2 (char * args[], int n_commands, char* pathFiltro, struct config 
 
 int main(int argc, char* argv[]){
     //inicializar as queues:
+    /*
     alto_q = createQueue();
     baixo_q = createQueue();
     eco_q = createQueue();
     rapido_q = createQueue();
     lento_q = createQueue();
-
+*/
 
     if(signal(SIGINT, handler) == SIG_ERR){
         perror("Erro de terminação");
