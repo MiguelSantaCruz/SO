@@ -20,4 +20,5 @@ void execTarefa (char*, char*, CONFIG );
 void sendStatus(CONFIG);
 void sendTerminate();
 void initializeConfig(CONFIG);
+char** splitWord(char* str);
 void handler(int);
