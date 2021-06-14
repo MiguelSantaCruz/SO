@@ -15,10 +15,13 @@ void sendPid(int fifo_fd);
 void leResposta();
 
 void handler (int signum) {
-    if (signum == SIGUSR1) {
-        printf("Recebido sinal 1");
-        leResposta();
-        _exit(0);
+    switch (signum)
+    {
+    case SIGPIPE:
+        printf("Sigpipe!!!!\n");
+        break;
+    default:
+        break;
     }
 }
 
@@ -35,10 +38,8 @@ int main(int argc, char* argv[]){
         puts("[Error] Server not iniciated!\n");
         return 0;
     }
-    char* str = malloc(sizeof(char)*200);
-    for (int i = 1; i < argc; i++) {;
+    for (int i = 1; i < argc; i++)
         write(fifo_fd,argv[i],strlen(argv[i]));
-    }
     leResposta(fifo_fd);
     return 0;
 }
@@ -54,15 +55,12 @@ void leResposta(){
     int readFifo_fd = open(SENDTOCLIENT,O_RDONLY);
     int bytes = 0;
     char buffer[BUFFERSIZE];
-    //write(fifo_fd,"ready",5);
-    //sleep(1);
     while ((bytes = read(readFifo_fd, buffer, BUFFERSIZE)) > 0) {
             buffer[bytes] = '\0';
             if(strcmp(buffer,"none") == 0){
                 printf("Recebido [NONE]\n");
             } else {
-                write(STDOUT_FILENO, buffer, bytes);
+                write(STDOUT_FILENO, buffer, strlen(buffer));
             }          
     }
-    close(readFifo_fd);
 }

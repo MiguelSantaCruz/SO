@@ -6,12 +6,17 @@
 #define FIFO "fifo"
 #define CONFIG_PATH "../etc/aurrasd.conf"
 #define NUMBER_OF_FILTERS 5
+#define STRING_SIZE 200
 
 struct config {
+    char* filtersPath; //Pasta onde estão os filtros (bin/aurras-filters)
     int* runningProcesses;
-    char** nomes;
-    int* valores;
+    char** execFiltros; //aurrasd-gain-double
+    char** identificadorFiltro; //alto
+    int* maxInstancias; // 2
 };
+
+char** splitWord(char* str);
 
 void handler(int signum){
     switch (signum)             //optei por um switch pq assim ficam todos os sinais neste handler
@@ -58,24 +63,26 @@ int readline(int fd, char* buf, size_t size){
 //-------------------------------------------------------------------------------
 
 
-int serverConfig (char* path, CONFIG cfg) {     //faz o povoamento da struct com os valores
+int serverConfig (char* path, CONFIG cfg) {     //faz o povoamento da struct com os maxInstancias
     char buffer[MAX_BUF_SIZE];
     int file_open_fd = open (path, O_RDONLY);    //começar por abrir o ficheiro para leitura
     if (file_open_fd < 0) {
-        perror ("[open] Path error");
+        perror ("[Erro] Ficheiro de configuração inválido :");
         _exit(-1);
     }
     for (int i=0; i<NUMBER_OF_FILTERS; i++) {
         readline(file_open_fd, buffer, BUFFERSIZE);
         char * substr = strtok(buffer, " ");
+        cfg -> identificadorFiltro[i] = malloc(sizeof(char)*100);
+        strcpy((char*) cfg -> identificadorFiltro[i],substr);
         substr = strtok(NULL, " ");
-        cfg -> nomes[i] = malloc(sizeof(char)*100);
-        strcpy ((char*) cfg->nomes[i], substr);
+        cfg -> execFiltros[i] = malloc(sizeof(char)*100);
+        strcpy ((char*) cfg->execFiltros[i], substr);
         substr = strtok(NULL, " ");
-        cfg->valores[i] = atoi(substr);
+        cfg->maxInstancias[i] = atoi(substr);
     }
     for (int i = 0; i < NUMBER_OF_FILTERS; i++)
-        printf("%s: %d\n",cfg->nomes[i],cfg->valores[i]);
+        printf("%s %s: %d\n",cfg->identificadorFiltro[i],cfg->execFiltros[i], cfg->maxInstancias[i]);
     return 0;
 }
 
@@ -83,7 +90,7 @@ int serverConfig (char* path, CONFIG cfg) {     //faz o povoamento da struct com
 
 int filtro_existente (char* nomeFiltro, CONFIG cfg) {
     for (int i = 0; i<NUMBER_OF_FILTERS; i++) {
-        if (strcmp (cfg->nomes[i], nomeFiltro)) {
+        if (strcmp (cfg->identificadorFiltro[i], nomeFiltro)) {
             return i;           //caso encontre, retornamos o indice em que encontramos
         }
     } 
@@ -93,22 +100,22 @@ int filtro_existente (char* nomeFiltro, CONFIG cfg) {
 
 int filtro_permitido (int idx_filtro, CONFIG cfg) {
     //return 1 se for possivel; return 0 se nao or possivel
-    if (cfg->valores[idx_filtro] > cfg->runningProcesses[idx_filtro]) {
+    if (cfg->maxInstancias[idx_filtro] > cfg->runningProcesses[idx_filtro]) {
         return 1;
     }
     return 0;
 }
 
 
-void execTarefa (char* nomeFiltro, char* args, CONFIG cfg) {
+void execTarefa (char* execFiltro, char* args, CONFIG cfg) {
     int indx_filtro;
-    if ((indx_filtro = filtro_existente(nomeFiltro, cfg)) != -1 && filtro_permitido(indx_filtro, cfg) == 1) {
+    if ((indx_filtro = filtro_existente(execFiltro, cfg)) != -1 && filtro_permitido(indx_filtro, cfg) == 1) {
         int status;
         int pid = fork();
         if (pid == 0) {
             //coisas do filho
-            char * path = strcat ("../bin/aurrasd_filters/", nomeFiltro);   //se isto nao funfar, testar com: execl(aurrasd-filters/aurrasd-echo, aurrasd-echo, NULL)
-            execl(path, nomeFiltro, NULL);
+            char * path = strcat ("../bin/aurrasd_filters/", execFiltro);   //se isto nao funfar, testar com: execl(aurrasd-filters/aurrasd-echo, aurrasd-echo, NULL)
+            execl(path, execFiltro, NULL);
             printf("Exec error (não é suposto aparecer isto dps de um exec)");  //para debugg :)
         }
         else {
@@ -145,7 +152,9 @@ int main(int argc, char* argv[]){
     }
     CONFIG cfg = malloc(sizeof(struct config));
     initializeConfig(cfg);
-    serverConfig(CONFIG_PATH, cfg);
+    serverConfig(argv[1], cfg);
+    cfg ->filtersPath = argv[2];
+    printf("Pasta dos filtros: %s\n",argv[2]);
     char buffer[1024];
     int bytes = 0;
     mkfifo(FIFO,0777);
@@ -156,10 +165,13 @@ int main(int argc, char* argv[]){
             buffer[bytes]='\0';
             printf("Lido: %s\n",buffer);
             fflush(stdout);
-            if(strcmp(buffer,"status") == 0){
+            char** args = splitWord(buffer);
+            if(strcmp(args[0],"status") == 0){
                 printf("Recebido [STATUS]\n");
                 sendStatus(cfg);
-            }else{
+            } else if(strcmp(args[0],"transform") == 0){
+                printf("Recebido [Transform]\n");
+            } else{
                 sendTerminate();
             }
         }
@@ -167,6 +179,21 @@ int main(int argc, char* argv[]){
     unlink(FIFO);
     unlink(SENDTOCLIENT);
     return 0;
+}
+
+char** splitWord(char* str){
+    char** args = malloc(sizeof(char)*10*100);
+    args[0] = malloc(sizeof(char)*STRING_SIZE);
+    char* token;
+    token = strtok(str," ");
+    strcpy(args[0],token);
+    int i = 1;
+    while ((token = strtok(NULL," ")) != NULL){
+        args[i] = malloc(sizeof(char)*STRING_SIZE);
+        strcpy(args[i],token);
+        i++;
+    }
+    return args;
 }
 
 void sendTerminate(){
@@ -182,17 +209,21 @@ void sendStatus(CONFIG cfg){
     char string[200];
     for (int i = 0; i < NUMBER_OF_FILTERS; i++)
     {
-        sprintf(string, "Running Processes of %s: [%d/%d]\n",cfg -> nomes[i] ,cfg->runningProcesses[i], cfg->valores[i]);
+        sprintf(string, "filter %s: %d/%d (running/max)\n",cfg -> identificadorFiltro[i] ,cfg->runningProcesses[i], cfg->maxInstancias[i]);
         write(sendToClient_fd, string, strlen(string));
         printf("Escrito %s para o cliente\n",string);
         fflush(stdout);
     }
+    pid_t pid = getpid();
+    sprintf(string,"pid: %d\n",pid);
+    write(sendToClient_fd,string,strlen(string));
     printf("Enviado status\n");
     close(sendToClient_fd);
 }
 
 void initializeConfig(CONFIG cfg){
-    cfg -> nomes = malloc(sizeof(char*)*NUMBER_OF_FILTERS);
-    cfg -> valores = malloc(sizeof(int)*NUMBER_OF_FILTERS);
+    cfg -> identificadorFiltro = malloc(sizeof(char*)*NUMBER_OF_FILTERS);
+    cfg -> execFiltros = malloc(sizeof(char*)*NUMBER_OF_FILTERS);
+    cfg -> maxInstancias = malloc(sizeof(int)*NUMBER_OF_FILTERS);
     cfg -> runningProcesses = malloc(sizeof(int)*NUMBER_OF_FILTERS);
 }
