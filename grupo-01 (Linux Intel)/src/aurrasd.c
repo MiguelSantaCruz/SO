@@ -152,58 +152,6 @@ void execTarefa_fail (char* nomeFiltro, CONFIG cfg, char* argv[]) {
 }
 
 
-
-void executaTarefa (int n_filtros, char ** filtros_args, char * input_file, char * output_name) {
-    int p[n_filtros+1][2];
-    int current_pipe = 0;
-    char*buffer = malloc(sizeof(char*) * 1024);
-    int filter = 0;
-    int bytes_read;
-    int inputFile_fd = open(input_file, O_RDONLY, 0666);
-    char * path = strcat ("./", output_name);
-    int outputFile_fd = open(path, O_CREAT | O_RDWR, 0666);
-    pipe(p[current_pipe]);
-    switch (fork()) {
-        case 0: //filho
-            close(p[current_pipe][1]);
-            while (current_pipe <= n_filtros) {
-                pipe(p[current_pipe+1]);
-                switch (fork()) {
-                case 0:
-                    //coisas
-                    dup2(p[current_pipe][0], STDIN_FILENO);
-                    close(p[current_pipe][0]);
-                    dup2(p[current_pipe+1][1], STDOUT_FILENO);
-                    close(p[current_pipe+1][1]);
-                    execl(filtros_args[filter], filtros_args[filter], NULL);
-                    break;
-                
-                default:
-                    close(p[current_pipe][0]);  //fechar o descritor de leitura do pipe anterior para nao ser herdado por mais nenhum processo
-                    close(p[current_pipe+1][1]);    //fechar o descritor de escrita do proximo pipe para nao ser herdado por mais nenhum processo
-                    break;
-                }
-                current_pipe++;
-                filter++;
-            }
-            while ((bytes_read = read(p[current_pipe][0], buffer, 1024)) > 0) {
-                write(outputFile_fd, buffer, bytes_read);
-            }
-
-            exit(0);
-            break;
-        default:
-            while((bytes_read = read(inputFile_fd, buffer, 1024)) > 0) {
-                write(p[current_pipe][1], buffer, bytes_read);
-            }
-            close(p[current_pipe][1]);
-            pause();
-            break;
-    }
-}
-
-
-
 int encontraIndice (char* identificador, struct config *cfg) {
     for (int i=0; i<5; i++) {
         if (strcmp (cfg->identificadorFiltro[i], identificador) == 0) {
@@ -212,6 +160,53 @@ int encontraIndice (char* identificador, struct config *cfg) {
     }
     return -1;
 }
+
+void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char * output_name) {
+    int filter = 0; 
+    int bytes_read = 0;
+    int p[n_filtros+1][2];
+    int current_pipe = 0;
+    char* buffer = malloc(sizeof(char)*1024);
+    char * path = malloc(sizeof(char)*100);
+    strcat(path,"./");
+    strcat(path,output_name);
+    int inputFile_fd = open(input_file, O_RDONLY, 0666);
+    if(inputFile_fd == -1){
+        perror("ficheiro inexistente");
+        sendTerminate();
+        return;
+    }
+    int outputFile_fd = open(path, O_CREAT | O_RDWR, 0666);
+    pipe(p[current_pipe]);
+    switch (fork()){
+    case 0:
+        close(p[current_pipe][1]);
+        while (current_pipe <= n_filtros) {
+        switch(fork()){
+            case 0:
+                //coisas
+                dup2(p[current_pipe][0], STDIN_FILENO);
+                close(p[current_pipe][0]);
+                dup2(p[current_pipe+1][1], STDOUT_FILENO);
+                close(p[current_pipe+1][1]);
+                execl(filtros_args[3],filtros_args[3],NULL);
+                break;
+            default:
+                close(p[current_pipe][0]);  //fechar o descritor de leitura do pipe anterior para nao ser herdado por mais nenhum processo
+                close(p[current_pipe+1][1]);    //fechar o descritor de escrita do proximo pipe para nao ser herdado por mais nenhum processo
+                break;
+        }
+        current_pipe++;
+        filter++;
+    }
+    default:
+        while ((bytes_read = read(p[current_pipe][0], buffer, 1024)) > 0) {
+            write(outputFile_fd, buffer, bytes_read);
+        }
+        break;
+    }
+}
+
 
 /*
 //a minha ideia era fazer o ultimo parametro do argv e quando acabar tirá-lo. E fazer isto até que o ultimo argumento do argv não seja nenhum nick de filtro
@@ -368,7 +363,7 @@ int main(int argc, char* argv[]){
     initializeConfig(cfg);
     serverConfig(argv[1], cfg);
     cfg ->filtersPath = argv[2];
-    printf("Pasta dos filtros: %s\n",argv[2]);
+    printf("Pasta dos filtros: %s\n",cfg->filtersPath);
     char buffer[1024];
     int bytes = 0;
     mkfifo(FIFO,0777);
@@ -379,12 +374,14 @@ int main(int argc, char* argv[]){
             buffer[bytes]='\0';
             printf("Lido: %s\n",buffer);
             fflush(stdout);
-            char** args = splitWord(buffer);
+            char** args = splitWord(buffer,cfg);
             if(strcmp(args[0],"status") == 0){
                 printf("Recebido [STATUS]\n");
                 sendStatus(cfg);
             } else if(strcmp(args[0],"transform") == 0){
                 printf("Recebido [Transform]\n");
+                printf("Numero de filtros: %d\n",numeroFiltros(args));
+                executaTarefa(numeroFiltros(args),args,args[1],args[2]);
             } else{
                 sendTerminate();
             }
@@ -395,19 +392,36 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
-char** splitWord(char* str){
+char** splitWord(char* str,CONFIG cfg){
     char** args = malloc(sizeof(char)*10*100);
     args[0] = malloc(sizeof(char)*STRING_SIZE);
     char* token;
     token = strtok(str," ");
     strcpy(args[0],token);
     int i = 1;
+    int index = 0;
     while ((token = strtok(NULL," ")) != NULL){
         args[i] = malloc(sizeof(char)*STRING_SIZE);
-        strcpy(args[i],token);
+        if (i > 2){
+            index = encontraIndice(token,cfg);
+            fflush(stdout);
+            if(index > 0 && index < NUMBER_OF_FILTERS) {
+                strcat(args[i],cfg->filtersPath);
+                strcat(args[i],"/");
+                strcat(args[i],(char*) (cfg->execFiltros[index]));
+            }
+        }else
+            strcpy(args[i],token);
         i++;
     }
     return args;
+}
+
+
+int numeroFiltros(char** args){
+    int i = 0;
+    for (i = 0; args[i]!=NULL; i++);
+    return i - 3;
 }
 
 void sendTerminate(){

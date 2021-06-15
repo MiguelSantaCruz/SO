@@ -38,8 +38,12 @@ int main(int argc, char* argv[]){
         puts("[Error] Server not iniciated!\n");
         return 0;
     }
-    for (int i = 1; i < argc; i++)
-        write(fifo_fd,argv[i],strlen(argv[i]));
+    char* output = malloc(sizeof(char)*500);
+    for (int i = 1; i < argc; i++){
+        strcat(output,argv[i]);
+        strcat(output," ");
+    }
+    write(fifo_fd,output,strlen(output));
     leResposta(fifo_fd);
     return 0;
 }
