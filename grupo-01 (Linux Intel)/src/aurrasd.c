@@ -161,14 +161,53 @@ int encontraIndice (char* identificador, struct config *cfg) {
 }
 
 
+
+void set_read(int* lpipe){
+    dup2(lpipe[0], STDIN_FILENO);
+    close(lpipe[0]); 
+    close(lpipe[1]); 
+}
+  
+void set_write(int* rpipe){
+    dup2(rpipe[1], STDOUT_FILENO);
+    close(rpipe[0]); 
+    close(rpipe[1]); 
+}
+
+void set_inputFile(int input,int* rpipe){
+    dup2(input, STDIN_FILENO);
+    dup2(rpipe[1],STDOUT_FILENO);
+    close(rpipe[0]);
+}
+
+void set_outputFile(int output,int* lpipe){
+    dup2(output, STDOUT_FILENO);
+    dup2(lpipe[0],STDIN_FILENO);
+    close(lpipe[1]); 
+}
+
+void fork_and_chain(int* lpipe, int* rpipe,char* filterPath,int input_fd,int output_fd){
+    if(!fork())
+    {
+        if(input_fd != -1){
+            set_inputFile(input_fd,rpipe);
+        } else if (output_fd != -1){
+            set_outputFile(output_fd,lpipe);
+        }else {
+            if(lpipe)
+                set_read(lpipe);
+            if(rpipe)
+                set_write(rpipe);
+        }
+        execl(filterPath,filterPath,NULL);
+    }
+}
+
 void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char * output_name, CONFIG cfg) {
-    int filter = 0; 
-    int bytes_read = 0;
-    int current_pipe = 0;
-    int nb_read = 0;
-    char* buffer = malloc(sizeof(char)*1024);
+    int p1[2];
+    int p2[2];
     char * path = malloc(sizeof(char)*100);
-    //strcat(path,"./");
+    //strcat(path,"./"); vai ser util dps para por em /tmp ou ot local
     strcat(path,output_name);
     int inputFile_fd = open(input_file, O_RDONLY, 0666);
     if(inputFile_fd == -1){
@@ -180,8 +219,71 @@ void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char 
     {
         printf("%d: %s\n",i,filtros_args[i]);   
     }
-    
     int outputFile_fd = open(path, O_CREAT | O_RDWR, 0666);
+    int pipeAtual = 0;
+    pipe(p1);
+    pipe(p2);
+    if(fork() == 0){
+        for (int i = 0; i < n_filtros; i++) {
+            if (fork() == 0) {
+                if(pipeAtual == 0) {
+                    close(p1[0]);
+                    dup2 (inputFile_fd,STDIN_FILENO);
+                    close(p1[1]);
+                    if(pipeAtual == n_filtros-1) {
+                        dup2(outputFile_fd,STDOUT_FILENO);
+                        close(p2[0]);
+                        close(p2[1]);
+                    }else dup2 (p2[0],STDOUT_FILENO);
+                    execl(filtros_args[3+pipeAtual],filtros_args[3+pipeAtual],NULL);
+                } else if(pipeAtual == n_filtros-1) {
+                    if(pipeAtual % 2 != 0){
+                        dup2(p2[0],STDIN_FILENO);
+                        dup2(outputFile_fd,STDOUT_FILENO);
+                        close(p1[0]);
+                        close(p1[1]);
+                        close(p2[1]);
+                    } else{
+                        dup2(p1[0],STDIN_FILENO);
+                        dup2(outputFile_fd,STDOUT_FILENO);
+                        close(p2[0]);
+                        close(p2[1]);
+                        close(p1[1]);
+                    }
+                    execl(filtros_args[3+pipeAtual],filtros_args[3+pipeAtual],NULL);
+                } else {
+                    if(i%2 != 0){
+                        dup2(p2[0],STDIN_FILENO);
+                        dup2(p1[0],STDOUT_FILENO);
+                        close(p1[1]);
+                        close(p2[1]);
+                    }else {
+                        dup2(p1[0],STDIN_FILENO);
+                        dup2(p2[0],STDOUT_FILENO);
+                        close(p1[1]);
+                        close(p2[1]);
+                    }
+                    execl(filtros_args[3+pipeAtual],filtros_args[3+pipeAtual],NULL);
+                }
+                pipeAtual++;
+                _exit(0);
+            } else { 
+                wait(NULL);
+                //pipeAtual++;
+                cfg -> runningProcesses[0]++;
+                close(inputFile_fd);
+                close(outputFile_fd);
+                printf("Esperando filho terminar\n");
+                
+                printf("Terminou\n");
+                printf("Terminando tarefa -1\n");
+                cfg->runningProcesses[0]--;
+                _exit(0);   
+            }
+        }
+    } else {
+    }
+    /*
     if(fork() == 0){
         if(fork() == 0) {
             printf("Começando nova tarefa +1\n");
@@ -201,8 +303,7 @@ void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char 
             _exit(0);   
         }
     } else {
-        
-    }
+    }*/
     
 }
 
