@@ -14,6 +14,7 @@
 void sendPid(int fifo_fd);
 void leResposta();
 
+//Função que tem por objetivo receber e manipular sinais
 void handler (int signum) {
     switch (signum)
     {
@@ -48,6 +49,7 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
+//Função para eviar o pid do cliente para o servidor usar no status
 void sendPid(int fifo_fd){
     pid_t pid = getpid();
     char str1[10];
@@ -55,6 +57,7 @@ void sendPid(int fifo_fd){
     write(fifo_fd,str1,strlen(str1));
 }
 
+//Função para ler o que vem do servidor através do pipe 
 void leResposta(){
     int readFifo_fd = open(SENDTOCLIENT,O_RDONLY);
     int bytes = 0;
