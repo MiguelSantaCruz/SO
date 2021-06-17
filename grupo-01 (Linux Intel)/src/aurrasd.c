@@ -18,26 +18,13 @@ struct config {
 };
 
 
-struct Queue* alto_q;
-struct Queue* baixo_q;
-struct Queue* eco_q;
-struct Queue* rapido_q;
-struct Queue* lento_q;
-
-int em_exec_alto = 0;
-int em_exec_baixo = 0;
-int em_exec_eco = 0;
-int em_exec_rapido = 0;
-int em_exec_lento = 0;
-
-
-
 void handler(int signum){
     switch (signum)             //optei por um switch pq assim ficam todos os sinais neste handler
     {
     case SIGINT:
         unlink(FIFO); 
         unlink(SENDTOCLIENT);
+        printf("Fechando pipes e terminando servidor\n");
         exit(0);
         break;
     case SIGPIPE:
@@ -182,11 +169,15 @@ void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char 
             if(fork() == 0){
                 if(i == 0) {
                     dup2(inputFile_fd,STDIN_FILENO);
-                    char str[30];
-                    sprintf(str,"../tmp/%s%d",random,i);
-                    creat(str,0777);
-                    outputFile_fd = open(str, O_CREAT | O_RDWR, 0666);
-                    dup2(outputFile_fd,STDOUT_FILENO);
+                    if(i == n_filtros -1){
+                        dup2(outputFile_fd,STDOUT_FILENO);
+                    } else{
+                        char str[30];
+                        sprintf(str,"../tmp/%s%d",random,i);
+                        creat(str,0777);
+                        outputFile_fd = open(str, O_CREAT | O_RDWR, 0666);
+                        dup2(outputFile_fd,STDOUT_FILENO);
+                    }
                 }
                 else if(i == n_filtros -1){
                     char tmp_output_path[30];
@@ -228,7 +219,6 @@ void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char 
                 printf("Removido /tmp/%s/%d\n",random,n_filtros-1);
                 kill(pid,SIGUSR2);
             }
-            perror("Aplicado um filtro");
         }   
     } 
 }
@@ -259,18 +249,21 @@ int main(int argc, char* argv[]){
         while ((bytes = read(fifo_fd, buffer, BUFFERSIZE)) > 0) {
             buffer[bytes]='\0';
             printf("Lido: %s\n",buffer);
-            fflush(stdout);
-            char** args = splitWord(buffer,cfg);
-            if(strcmp(args[0],"status") == 0){
+            if(strcmp(buffer,"status ") == 0){
                 printf("Recebido [STATUS]\n");
                 sendStatus(cfg);
-            } else if(strcmp(args[0],"transform") == 0){
-                printf("Recebido [Transform]\n");
-                printf("Numero de filtros: %d\n",numeroFiltros(args));
-                sendTerminate();
-                executaTarefa(numeroFiltros(args),args,args[1],args[2],cfg);
-            } else{
-                sendTerminate();
+            }else {
+                char** args = splitWord(buffer,cfg);
+                if(args == NULL){
+                    sendTerminate();
+                }else if(strcmp(args[0],"transform") == 0){
+                    printf("Recebido [Transform]\n");
+                    printf("Numero de filtros: %d\n",numeroFiltros(args));
+                    sendProcessing();
+                    executaTarefa(numeroFiltros(args),args,args[1],args[2],cfg);
+                } else{
+                    sendTerminate();
+                }
             }
         }
     }
@@ -291,6 +284,7 @@ char** splitWord(char* str,CONFIG cfg){
         args[i] = malloc(sizeof(char)*STRING_SIZE);
         if (i > 2){
             index = encontraIndice(token,cfg);
+            if(index == -1) return NULL;
             fflush(stdout);
             if(index >= 0 && index < NUMBER_OF_FILTERS) {
                 strcat(args[i],cfg->filtersPath);
@@ -301,6 +295,7 @@ char** splitWord(char* str,CONFIG cfg){
             strcpy(args[i],token);
         i++;
     }
+    if(i < 4) return NULL;
     for (int i = 0; args[i] != NULL ; i++)
     {
         printf("%d: %s\n",i,args[i]);   
@@ -314,6 +309,15 @@ int numeroFiltros(char** args){
     for (i = 0; args[i]!=NULL; i++);
     return i - 3;
 }
+
+void sendProcessing(){
+    int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
+    write(sendToClient_fd, "processing", 10);
+    close(sendToClient_fd);
+    printf("Enviado [PROCESSING]\n");
+    fflush(stdout);
+}
+
 
 void sendTerminate(){
     int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);

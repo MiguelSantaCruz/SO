@@ -30,7 +30,8 @@ int main(int argc, char* argv[]){
         perror("Sinal 1");
     }
     if (argc < 2) {
-        perror ("Formato inválido");
+        printf("./aurras status\n");
+        printf("./aurras transform input-filename output-filename filter-id-1 filter-id-2 ...\n");
         return -1;
     }
     int fifo_fd = open(FIFO,O_WRONLY);
@@ -62,8 +63,9 @@ void leResposta(){
     while ((bytes = read(readFifo_fd, buffer, BUFFERSIZE)) > 0) {
             buffer[bytes] = '\0';
             if(strcmp(buffer,"none") == 0){
-                printf("Recebido [NONE]\n");
-            } else {
+            } else if(strcmp(buffer,"processing") == 0){
+                printf("processing\n");
+            }else {
                 write(STDOUT_FILENO, buffer, strlen(buffer));
             }          
     }

@@ -19,6 +19,7 @@ int serverConfig (char*, CONFIG);
 void execTarefa (char*, char*, CONFIG );
 void sendStatus(CONFIG);
 void sendTerminate();
+void sendProcessing();
 void initializeConfig(CONFIG);
 char** splitWord(char* ,CONFIG);
 int numeroFiltros(char** );
