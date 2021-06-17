@@ -1,5 +1,4 @@
 #include "aurrasd.h"
-#include "queue.h"
 
 #define MAX_READ_BUFFER 2048
 #define MAX_BUF_SIZE 1024
