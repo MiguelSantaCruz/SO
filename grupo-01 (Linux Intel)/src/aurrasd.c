@@ -9,6 +9,7 @@
 #define NUMBER_OF_FILTERS 5
 #define STRING_SIZE 200
 
+//struct utilizada para armazenar a informação dos filtros
 struct config {
     char* filtersPath;                //Pasta onde estão os filtros (bin/aurras-filters)
     int* runningProcesses;            //processos a correr de momento
@@ -17,7 +18,7 @@ struct config {
     char** identificadorFiltro;       //alto
 };
 
-
+//Função que tem por objetivo receber e manipular sinais
 void handler(int signum){
     switch (signum)             //optei por um switch pq assim ficam todos os sinais neste handler
     {
@@ -53,6 +54,7 @@ int readch(int fd, char* buf){
     return read(fd,buf,1);
 }
 
+//Funçao que lê linha a linha o conteudo de um ficheiro
 int readline(int fd, char* buf, size_t size){
     char* tmp = malloc(sizeof(char*));
     int curr = 0;
@@ -69,8 +71,8 @@ int readline(int fd, char* buf, size_t size){
 
 //-------------------------------------------------------------------------------
 
-
-int serverConfig (char* path, CONFIG cfg) {     //faz o povoamento da struct com os maxInstancias
+//Função que faz o povoamento da struct config com todas as informações provenientes do ficheiro aurrasd.conf (cada informação tem um campo) 
+int serverConfig (char* path, CONFIG cfg) {    
     char buffer[MAX_BUF_SIZE];
     int file_open_fd = open (path, O_RDONLY);    //começar por abrir o ficheiro para leitura
     if (file_open_fd < 0) {
@@ -94,7 +96,7 @@ int serverConfig (char* path, CONFIG cfg) {     //faz o povoamento da struct com
 }
 
 
-
+//Verifica se um filtro existe e devolve o seu indice na struct config
 int filtro_existente (char* nomeFiltro, CONFIG cfg) {
     for (int i = 0; i<NUMBER_OF_FILTERS; i++) {
         if (strcmp (cfg->execFiltros[i], nomeFiltro) == 0) {
@@ -105,6 +107,7 @@ int filtro_existente (char* nomeFiltro, CONFIG cfg) {
 }
 
 
+//Verifica se ha menos pedidos a correr do que o maximo permitido para um dado filtro
 int filtro_permitido (int idx_filtro, CONFIG cfg) {
     //return 1 se for possivel; return 0 se nao or possivel
     if (cfg->maxInstancias[idx_filtro] > cfg->runningProcesses[idx_filtro]) {
@@ -113,6 +116,7 @@ int filtro_permitido (int idx_filtro, CONFIG cfg) {
     return 0;
 }
 
+//Função para encontrar o indice das informaçoes de um filtro na struct config
 int encontraIndice (char* identificador, struct config *cfg) {
     for (int i=0; i<5; i++) {
         if (strcmp (cfg->identificadorFiltro[i], identificador) == 0) {
@@ -135,7 +139,7 @@ int encontraIndicePath (char* path, struct config *cfg) {
     return -1;
 }
 
-
+//Cria uma string com tamanho len aleatória
 char* randomString(int len) {
     char* s = malloc(sizeof(char)*len+1);
     char letters[] = "abcdefghijklmnopqrstuvwxyz";
@@ -146,6 +150,7 @@ char* randomString(int len) {
     return s;
 }
 
+//Função que aplica os filtros (provenientes do switch transform do comando ./aurras) ao ficheiro de input
 void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char * output_name, CONFIG cfg) {
     char * path = malloc(sizeof(char)*100);
     //strcat(path,"./"); vai ser util dps para por em /tmp ou ot local
@@ -219,7 +224,8 @@ void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char 
                 printf("Removido /tmp/%s/%d\n",random,n_filtros-1);
                 kill(pid,SIGUSR2);
             }
-        }   
+        } 
+        _exit(0);  
     } 
 }
 
@@ -272,6 +278,7 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
+//Faz o parsing do argumento enviado pelo cliente e obtem-se um array de strings do tipo: [[transform], [samples/sample-1.m4a], [output.m4a], [../bin/aurrasd-filters/aurras-gain-double]]
 char** splitWord(char* str,CONFIG cfg){
     char** args = malloc(sizeof(char)*10*100);
     args[0] = malloc(sizeof(char)*STRING_SIZE);
@@ -304,12 +311,14 @@ char** splitWord(char* str,CONFIG cfg){
 }
 
 
+//Calcula o numero de filtros que o cliente pretende aplicar
 int numeroFiltros(char** args){
     int i = 0;
     for (i = 0; args[i]!=NULL; i++);
     return i - 3;
 }
 
+//Envia uma mensagem de processing ao cliente
 void sendProcessing(){
     int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
     write(sendToClient_fd, "processing", 10);
@@ -318,7 +327,7 @@ void sendProcessing(){
     fflush(stdout);
 }
 
-
+//Envia uma mensagem de terminação ao cliente
 void sendTerminate(){
     int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
     write(sendToClient_fd, "none", 4);
@@ -327,6 +336,7 @@ void sendTerminate(){
     fflush(stdout);
 }
 
+//Funçao para enviar o status dos processos para o cliente e notificá-lo do que esta a decorrer
 void sendStatus(CONFIG cfg){
     int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
     char string[200];
@@ -344,6 +354,7 @@ void sendStatus(CONFIG cfg){
     close(sendToClient_fd);
 }
 
+//Função para alocar o espaço necessario para a struct config 
 void initializeConfig(CONFIG cfg){
     cfg -> identificadorFiltro = malloc(sizeof(char*)*NUMBER_OF_FILTERS);
     cfg -> execFiltros = malloc(sizeof(char*)*NUMBER_OF_FILTERS);
