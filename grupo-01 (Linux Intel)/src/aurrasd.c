@@ -43,6 +43,13 @@ void handler(int signum){
     case SIGPIPE:
         printf("[SIGPIPE] O cliente fechou o terminal de escrita\n");
         break;
+    case SIGUSR1:
+        printf("Começou processo\n");
+        return;
+        break;
+    case SIGUSR2:
+        printf("Terminou processo\n");;
+        return;
     default:
         break;
     }
@@ -52,7 +59,7 @@ void handler(int signum){
 
 //------------------------------FUNÇÃO AUXILIAR (readline) para o serverConfig -----------------------------------------------
 
-int contador = 0 ;
+int contador = 0;
 
 int readch(int fd, char* buf){
     contador ++;
@@ -119,38 +126,6 @@ int filtro_permitido (int idx_filtro, CONFIG cfg) {
     return 0;
 }
 
-        //nome do fitro precisa de ser, por ex: "aurrasd-gain-double"
-void execTarefa_fail (char* nomeFiltro, CONFIG cfg, char* argv[]) {
-    int indx_filtro;
-    if ((indx_filtro = filtro_existente(nomeFiltro, cfg)) != -1 && filtro_permitido(indx_filtro, cfg) == 1) {
-        int status;
-        int pid = fork();
-        if (pid == 0) {
-            //coisas do filho
-            char * path = strcat ("../bin/aurrasd_filters/", nomeFiltro);   //se isto nao funfar, testar com: execl(aurrasd-filters/aurrasd-echo, aurrasd-echo, NULL)
-            execl(path, argv[2], NULL);     //por ex: bin/aurrasd-filters/aurrasd-echo < samples/samples-1.m4a  (visto de acordo com o README)
-            printf("Exec error (não é suposto aparecer isto dps de um exec)");  //para debugg :)
-        }
-        else {
-            //coisas do pai
-            wait(&status);
-            
-            if (WIFEXITED(status)) {
-                if (WEXITSTATUS(status) < 255) {
-                    printf("[pai] tudo ok");
-                }
-                else {
-                    printf("[pai] erros...");
-                }
-            }
-        }
-    }
-    else {
-        printf ("Não pode submeter mais pedidos. A lista de espera está cheia\n");
-    }
-}
-
-
 int encontraIndice (char* identificador, struct config *cfg) {
     for (int i=0; i<5; i++) {
         if (strcmp (cfg->identificadorFiltro[i], identificador) == 0) {
@@ -160,52 +135,31 @@ int encontraIndice (char* identificador, struct config *cfg) {
     return -1;
 }
 
-
-
-void set_read(int* lpipe){
-    dup2(lpipe[0], STDIN_FILENO);
-    close(lpipe[0]); 
-    close(lpipe[1]); 
-}
-  
-void set_write(int* rpipe){
-    dup2(rpipe[1], STDOUT_FILENO);
-    close(rpipe[0]); 
-    close(rpipe[1]); 
-}
-
-void set_inputFile(int input,int* rpipe){
-    dup2(input, STDIN_FILENO);
-    dup2(rpipe[1],STDOUT_FILENO);
-    close(rpipe[0]);
-}
-
-void set_outputFile(int output,int* lpipe){
-    dup2(output, STDOUT_FILENO);
-    dup2(lpipe[0],STDIN_FILENO);
-    close(lpipe[1]); 
-}
-
-void fork_and_chain(int* lpipe, int* rpipe,char* filterPath,int input_fd,int output_fd){
-    if(!fork())
-    {
-        if(input_fd != -1){
-            set_inputFile(input_fd,rpipe);
-        } else if (output_fd != -1){
-            set_outputFile(output_fd,lpipe);
-        }else {
-            if(lpipe)
-                set_read(lpipe);
-            if(rpipe)
-                set_write(rpipe);
+//Recebe ../bin/aurrasd-filters/aurrasd-echo e procura em execFiltro aurrasd-echo e devolve o indice
+int encontraIndicePath (char* path, struct config *cfg) {
+    char* token;
+    token = strtok(path,"/");
+    for (int i = 0; i < 3; i++) token = strtok(NULL,"/");
+    for (int i=0; i<5; i++) {
+        if (strcmp (cfg->execFiltros[i], token) == 0) {
+            return i;
         }
-        execl(filterPath,filterPath,NULL);
     }
+    return -1;
+}
+
+
+char* randomString(int len) {
+    char* s = malloc(sizeof(char)*len+1);
+    char letters[] = "abcdefghijklmnopqrstuvwxyz";
+    for (int i = 0; i < len; ++i) {
+        s[i] = letters[rand() % (sizeof(letters) - 1)];
+    }
+    s[len] = 0;
+    return s;
 }
 
 void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char * output_name, CONFIG cfg) {
-    int p1[2];
-    int p2[2];
     char * path = malloc(sizeof(char)*100);
     //strcat(path,"./"); vai ser util dps para por em /tmp ou ot local
     strcat(path,output_name);
@@ -217,94 +171,66 @@ void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char 
     }
     for (int i = 0; filtros_args[i] != NULL ; i++)
     {
-        printf("%d: %s\n",i,filtros_args[i]);   
+        printf("%d: %s\n",i,filtros_args[i]);  
     }
     int outputFile_fd = open(path, O_CREAT | O_RDWR, 0666);
-    int pipeAtual = 0;
-    pipe(p1);
-    pipe(p2);
+    char* random = randomString(5);
+    pid_t pid = getpid();
     if(fork() == 0){
-        for (int i = 0; i < n_filtros; i++) {
-            if (fork() == 0) {
-                if(pipeAtual == 0) {
-                    close(p1[0]);
-                    dup2 (inputFile_fd,STDIN_FILENO);
-                    close(p1[1]);
-                    if(pipeAtual == n_filtros-1) {
-                        dup2(outputFile_fd,STDOUT_FILENO);
-                        close(p2[0]);
-                        close(p2[1]);
-                    }else dup2 (p2[0],STDOUT_FILENO);
-                    execl(filtros_args[3+pipeAtual],filtros_args[3+pipeAtual],NULL);
-                } else if(pipeAtual == n_filtros-1) {
-                    if(pipeAtual % 2 != 0){
-                        dup2(p2[0],STDIN_FILENO);
-                        dup2(outputFile_fd,STDOUT_FILENO);
-                        close(p1[0]);
-                        close(p1[1]);
-                        close(p2[1]);
-                    } else{
-                        dup2(p1[0],STDIN_FILENO);
-                        dup2(outputFile_fd,STDOUT_FILENO);
-                        close(p2[0]);
-                        close(p2[1]);
-                        close(p1[1]);
-                    }
-                    execl(filtros_args[3+pipeAtual],filtros_args[3+pipeAtual],NULL);
-                } else {
-                    if(i%2 != 0){
-                        dup2(p2[0],STDIN_FILENO);
-                        dup2(p1[0],STDOUT_FILENO);
-                        close(p1[1]);
-                        close(p2[1]);
-                    }else {
-                        dup2(p1[0],STDIN_FILENO);
-                        dup2(p2[0],STDOUT_FILENO);
-                        close(p1[1]);
-                        close(p2[1]);
-                    }
-                    execl(filtros_args[3+pipeAtual],filtros_args[3+pipeAtual],NULL);
+        for (int i = 0; i < n_filtros; i++)
+        {
+            if(fork() == 0){
+                if(i == 0) {
+                    dup2(inputFile_fd,STDIN_FILENO);
+                    char str[30];
+                    sprintf(str,"../tmp/%s%d",random,i);
+                    creat(str,0777);
+                    outputFile_fd = open(str, O_CREAT | O_RDWR, 0666);
+                    dup2(outputFile_fd,STDOUT_FILENO);
                 }
-                pipeAtual++;
-                _exit(0);
-            } else { 
-                wait(NULL);
-                //pipeAtual++;
-                cfg -> runningProcesses[0]++;
-                close(inputFile_fd);
-                close(outputFile_fd);
-                printf("Esperando filho terminar\n");
-                
-                printf("Terminou\n");
-                printf("Terminando tarefa -1\n");
-                cfg->runningProcesses[0]--;
-                _exit(0);   
+                else if(i == n_filtros -1){
+                    char tmp_output_path[30];
+                    if(i>1) {
+                        sprintf(tmp_output_path,"../tmp/%s%d",random,i-2);
+                        remove(tmp_output_path);
+                    }
+                    sprintf(tmp_output_path,"../tmp/%s%d",random,i-1);
+                    outputFile_fd = open(tmp_output_path,O_RDWR, 0666);
+                    dup2(outputFile_fd,STDIN_FILENO);
+                    outputFile_fd = open(path, O_CREAT | O_RDWR, 0666);
+                    dup2(outputFile_fd,STDOUT_FILENO);
+                } else {
+                    char tmp_output_path[30];
+                    if(i>1) {
+                        sprintf(tmp_output_path,"../tmp/%s%d",random,i-2);
+                        remove(tmp_output_path);
+                    }
+                    sprintf(tmp_output_path,"../tmp/%s%d",random,i-1);
+                    outputFile_fd = open(tmp_output_path,O_RDWR, 0666);
+                    dup2(outputFile_fd,STDIN_FILENO);
+                    char str[30];
+                    sprintf(str,"../tmp/%s%d",random,i);
+                    creat(str,0777);
+                    outputFile_fd = open(str, O_RDWR, 0666);
+                    dup2(outputFile_fd,STDOUT_FILENO);
+                }
+                kill(pid,SIGUSR1);
+                if(execl(filtros_args[3+i],filtros_args[3+i],NULL) == -1){
+                    perror("Erro ao fazer exec");
+                    _exit(0);
+                }
             }
-        }
-    } else {
-    }
-    /*
-    if(fork() == 0){
-        if(fork() == 0) {
-            printf("Começando nova tarefa +1\n");
-            dup2(inputFile_fd,STDIN_FILENO);
-            dup2(outputFile_fd,STDOUT_FILENO);
-            execl(filtros_args[3],filtros_args[3],NULL);
-            _exit(0);
-        }else { 
-            cfg -> runningProcesses[0]++;
-            close(inputFile_fd);
-            close(outputFile_fd);
-            printf("Esperando filho terminar\n");
             wait(NULL);
-            printf("Terminou\n");
-            printf("Terminando tarefa -1\n");
-            cfg->runningProcesses[0]--;
-            _exit(0);   
-        }
-    } else {
-    }*/
-    
+            if(i == n_filtros-1){
+                char str[30];
+                sprintf(str,"../tmp/%s%d",random,n_filtros-2);
+                remove(str);
+                printf("Removido /tmp/%s/%d\n",random,n_filtros-1);
+                kill(pid,SIGUSR2);
+            }
+            perror("Aplicado um filtro");
+        }   
+    } 
 }
 
 
@@ -313,6 +239,8 @@ int main(int argc, char* argv[]){
         perror("Erro de terminação");
     }
     signal(SIGPIPE,handler);
+    signal(SIGUSR1,handler);
+    signal(SIGUSR2,handler);
     if (argc < 3) {
         perror("Formato de execução incorreto!");
         return -1;
