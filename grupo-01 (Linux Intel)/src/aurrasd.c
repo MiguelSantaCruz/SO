@@ -221,10 +221,14 @@ void executaTarefa (int n_filtros,char ** filtros_args, char * input_file, char 
                 char str[30];
                 sprintf(str,"../tmp/%s%d",random,n_filtros-2);
                 remove(str);
-                printf("Removido /tmp/%s/%d\n",random,n_filtros-1);
+                printf("Removido /tmp/%s%d\n",random,n_filtros-1);
                 kill(pid,SIGUSR2);
             }
         } 
+        for (int i = 0; i < numeroFiltros(filtros_args); i++)
+        {
+            cfg ->runningProcesses[encontraIndicePath(filtros_args[3+i],cfg)]++;
+        }
         _exit(0);  
     } 
 }
@@ -261,7 +265,7 @@ int main(int argc, char* argv[]){
             }else {
                 char** args = splitWord(buffer,cfg);
                 if(args == NULL){
-                    sendTerminate();
+                    sendInvalidCommand();
                 }else if(strcmp(args[0],"transform") == 0){
                     printf("Recebido [Transform]\n");
                     printf("Numero de filtros: %d\n",numeroFiltros(args));
@@ -324,6 +328,16 @@ void sendProcessing(){
     write(sendToClient_fd, "processing", 10);
     close(sendToClient_fd);
     printf("Enviado [PROCESSING]\n");
+    fflush(stdout);
+}
+
+
+//Envia uma mensagem de erro ao cliente devido a um comando inválido
+void sendInvalidCommand(){
+    int sendToClient_fd = open(SENDTOCLIENT, O_WRONLY);
+    write(sendToClient_fd, "Comando inválido\n", 18);
+    close(sendToClient_fd);
+    printf("Enviado [INVALID]\n");
     fflush(stdout);
 }
 
