@@ -1,5 +1,4 @@
 #include "aurrasd.h"
-#include "queue.h"
 
 #define MAX_READ_BUFFER 2048
 #define MAX_BUF_SIZE 1024
@@ -8,6 +7,15 @@
 #define CONFIG_PATH "../etc/aurrasd.conf"
 #define NUMBER_OF_FILTERS 5
 #define STRING_SIZE 200
+
+void* create_shared_memory(size_t size) {
+    // Criar memória com permissão read and write
+    int protection = PROT_READ | PROT_WRITE;
+    int visibility = MAP_SHARED;
+    return mmap(NULL, size, protection, visibility, -1, 0);
+}
+
+
 
 //struct utilizada para armazenar a informação dos filtros
 struct config {

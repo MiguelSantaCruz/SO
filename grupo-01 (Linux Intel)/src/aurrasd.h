@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
+
 
 #define BUFFERSIZE 1024
 
